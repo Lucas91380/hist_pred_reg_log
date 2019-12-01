@@ -1,0 +1,35 @@
+---
+title: "Data challenge prédiction de l'histologie"
+author: "Lucas Chabeau"
+date: "01/12/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+#Option pour que le code ne soit pas affiché lors du knit
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+# 1. Présentation du problème et prétraitement des données.
+
+## Problématique
+
+Nous possédons un jeu de données sur plusieurs centaines de patients atteints de deux pathologique qui s'opposent :
+
+- **Le carcinome épidermoïde de poumons** : cancer qui se développe sur de la peau et des muqueuses (si j'ai bien compris).
+- **L'adenocarcinome de poumons** : tumeur maligne qui se développe sur des glandes.
+
+*Documentation lue pour comprendre la différence entre les deux pathologies*
+
+- https://cancer.ooreka.fr/astuce/voir/447863/adenocarcinome
+- https://fr.wikipedia.org/wiki/Carcinome_%C3%A9pidermo%C3%AFde
+- https://fr.wikipedia.org/wiki/Ad%C3%A9nocarcinome
+- https://fr.esdifferent.com/difference-between-carcinoma-and-adenocarcinoma
+
+La problématique de ce datachallenge est de trouver un modèle de régréssion logistique qui prédit au mieux l'histologie des patients (carcinome épidermoïde ou adenocarcinome) avec un peu plus de 1000 variables explicatives à nore disposition.
+
+## Traitement préliminaire des données
+
+# 2. Séléction du modèle.
+
+# 3. Interprétation du modèle et du score.
