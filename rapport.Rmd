@@ -12,7 +12,7 @@ knitr::opts_chunk$set(echo = FALSE)
 
 # 1. Présentation du problème et prétraitement des données.
 
-## Problématique
+### Problématique
 
 Nous possédons un jeu de données sur plusieurs centaines de patients atteints de deux pathologique qui s'opposent :
 
@@ -28,8 +28,142 @@ Nous possédons un jeu de données sur plusieurs centaines de patients atteints 
 
 La problématique de ce datachallenge est de trouver un modèle de régréssion logistique qui prédit au mieux l'histologie des patients (carcinome épidermoïde ou adenocarcinome) avec un peu plus de 1000 variables explicatives à nore disposition.
 
-## Traitement préliminaire des données
+### Traitement préliminaire des données
+
+```{r}
+###Importation des données
+setwd("/home/chabeau/Documents/UGA/projets/sex_pred_reg_log")
+
+#Jeu de données d'apprentissage
+d <- readRDS("starting_kit_histology/data_learn.rds")
+
+#Jeu de données de test
+test <- readRDS("starting_kit_histology/data_test_histology.rds")
+```
+
+
+Tranformation des variables qualitatives en variables de type "factor".
+
+```{r, echo=TRUE}
+#Jeu de données d'apprentissage
+for ( v in c("sex", "tissue_status", "histology", "os_months", "dead", "dead_at_24_months", "t", "n", "m", "tnm_stage", "tnm_grade") ) {
+    d[[ v ]] <- as.factor(x = d[[ v ]])
+}
+
+#Jeu de données de test
+for ( v in c("sex", "tissue_status", "histology", "os_months", "dead", "dead_at_24_months", "t", "n", "m", "tnm_stage", "tnm_grade") ) {
+    test[[ v ]] <- as.factor(x = test[[ v ]])
+}
+```
+
+Le caractère "-" présent dans certaines variables posera problème lors de l'écriture d'expression des modèles ( "-" est un caractère pris en compte dans l'expression du modèle, comme "+"). Nous anticipons donc cette erreur ici..
+
+```{r, echo=TRUE}
+#Renommage des variables avec des caractères qui posent problème (-)
+names(d) <- sub("-","_",names(d))
+names(test) <- sub("-","_",names(d))
+```
+
 
 # 2. Séléction du modèle.
 
+Nous commençons par vérifier que notre échantillon contient des effectifs suffisants de chaque classe pour construire notre modèle. Nous voyons que c'est bon.
+
+```{r}
+table(d$histology)
+```
+
+Nous commençons la séléction du modèle en regardant les caractéristiques de tous les modèles univariés de l'histologie expliquée par les gènes. Le volcano plot ci-dessous montre en abscisse la valeur des $\beta$ estimés dans le modèle univarié et en ordonnée le log10 de la p-valeur du modèle.
+
+```{r, echo=TRUE}
+#Variables gênes
+genes <- names(d[,13:1012])
+
+#Fonction qui calcule
+Genes_univ <- function(g){
+  modele = glm(as.factor(c(as.vector(d$histology), rep("TCGA-LUAD", 2), rep("TCGA-LUSC", 2)))~c(d[[g]],0,max(d[,genes]),0,max(d[,genes])), family = binomial(link = 'logit'))
+  b = modele$coefficients[[2]]
+  pv = summary(modele)$coefficients[2,4]
+  return(c(pval = pv,beta = b))
+}
+
+#Enregistrement des betas et des p-valeurs dans une dataframe
+res <- sapply(genes, Genes_univ)
+res <- as.data.frame(t(res))
+```
+
+```{r, echo=TRUE}
+#Base du graphique
+with(res, plot(beta, -log10(pval), pch=20, main="Volcano plot", xlim=c(-2,3)))
+
+#Ajout des couleurs
+with(subset(res, pval>0.05 & abs(beta)<1.5 ), points(beta, -log10(pval), pch=20, col="red"))
+with(subset(res, (pval<0.05 & abs(beta)<1.5)  | (pval>0.05 & abs(beta)>1.5) ), points(beta, -log10(pval), pch=20, col="orange"))
+with(subset(res, pval<0.05 & abs(beta)>1.5), points(beta, -log10(pval), pch=20, col="green"))
+
+#Ajout des noms des meilleurs gènes
+library(calibrate)
+with(subset(res, pval<0.05 & abs(beta)>1.5), textxy(beta, -log10(pval), rownames(subset(res, pval<0.05 & abs(beta)>1.5)), cex=.8))
+```
+
+- En vert, nous avons les gènes dont le modèle univarié avait une p-valeur inférieure à 0.05 et un $\beta$ plus grand que 1.5 ou plus petit que -1.5 (valeur arbitraire qui peut être redéfinie tant que |$\beta$| est suffisammet grand, je l'ai choisie car elle permet d'avoir un nombre raisonnable de gènes).
+
+- En orange, les gènes pour lesquels nous une des deux conditions est remplie (p-valeur ou $\beta$).
+
+- En rouge, les autres gènes.
+
+Nous allons donc prendre les gènes en vert et faire notre séléction de variable avec un processus "stepwise" qui partira de cette base.
+
+```{r, echo=TRUE}
+#Formule du modèle de départ
+formul <- paste("d$histology ~", paste(rownames(subset(res, pval<0.05 & abs(beta)>1.5)), collapse = " + "), " ")
+
+#Création du modèle de départ
+model <- glm(
+    formula = formul,
+    data = d,
+    family = binomial(link = 'logit')
+)
+
+#Sélection de variables par méthode stepwise
+step(model, dir='both')
+```
+
 # 3. Interprétation du modèle et du score.
+
+Nous obtenons finalement le modèle suivant.
+
+```{r, echo=TRUE}
+model <- glm(
+    formula = histology ~ TAF2 + UBE2G1 + UBA6 + GSK3B + ETF1 + 
+    CSK + PPP2R5D + VPS8 + SENP1 + TMEM189 + WDPCP + UFD1 + LMNB2 + 
+    FBL + RAB35 + SAE1 + U2AF2 + PTPN9 
+  , data = d
+  , family = binomial(link = 'logit')
+)
+summary(object = model)
+```
+
+Nous trouvons donc que le niveau d'expression des gènes présents dans cette liste ont une influence sur la pathologie qu'aura le patient.
+
+Si je ne dis pas de bêtises, un niveau d'expression fort des gènes suivants a un effet statistiquement significatif de favorisation du développement d'un adenocarcinome des poumons plutôt qu'un carcinome épidermoïde de poumons :
+
+- TAF2
+- UBE2G1
+- UBA6
+- ETF1
+- CSK
+- VPS8
+- TMEM189
+- WDPCP
+- UFD1
+- RAB35
+- U2AF2
+
+Quand les gènes suivants auront l'effet inverse :
+
+- GSK3B
+- LMNB2
+- SAE1
+
+Lors du test de notre modèle, nous obtenons une très bon taux de bonnes prédictions (96%), je ne chercherai pas à l'améliorer, bien que certaines méthodes de statistique en grande dimension comme les SVM ou les regression ridge et lasso pourrait peut-être s'avérer plus adaptées au vu du nombre très élevé de variables.
