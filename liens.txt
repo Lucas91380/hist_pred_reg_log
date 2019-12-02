@@ -1,0 +1,5 @@
+repository :
+https://github.com/Lucas91380/sex_pred_reg_log
+
+rapport interprété :
+http://htmlpreview.github.io/?https://github.com/Lucas91380/sex_pred_reg_log/blob/master/rapport.html
